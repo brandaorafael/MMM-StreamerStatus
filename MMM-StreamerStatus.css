@@ -70,9 +70,15 @@
   vertical-align: middle;
 }
 
+@keyframes live-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(229, 62, 62, 0.7); }
+  70%  { box-shadow: 0 0 0 6px rgba(229, 62, 62, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(229, 62, 62, 0); }
+}
+
 .live-dot.is-live {
   background-color: #e53e3e;
-  box-shadow: 0 0 5px #e53e3e99;
+  animation: live-pulse 1.8s ease-in-out infinite;
 }
 
 .live-dot.is-offline {
@@ -94,6 +100,12 @@
   border-left: 3px solid #444;
   padding: 8px 12px;
   box-sizing: border-box;
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.streamer-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
 }
 
 .streamer-card.is-live.platform-twitch  { border-left-color: #9147ff; }
