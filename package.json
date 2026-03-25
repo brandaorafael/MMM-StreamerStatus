@@ -1,0 +1,9 @@
+{
+  "name": "MMM-StreamerStatus",
+  "version": "1.0.0",
+  "description": "MagicMirror module to display live streamers from Twitch, Kick, and YouTube",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

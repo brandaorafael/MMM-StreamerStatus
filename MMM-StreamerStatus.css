@@ -1,0 +1,144 @@
+/* ─── MMM-StreamerStatus ────────────────────────────────────────────────── */
+
+/* ── Platform colors ─────────────────────────────────────────────────────── */
+.icon-platform  { font-style: normal; }
+.icon-twitch    { color: #9147ff; }
+.icon-youtube   { color: #ff0000; }
+.icon-kick {
+  display: inline-block;
+  font-weight: bold;
+  font-size: 0.75em;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 3px;
+  background: #53fc18;
+  color: #000;
+  vertical-align: middle;
+}
+
+/* ── List View ───────────────────────────────────────────────────────────── */
+.streamer-list {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.streamer-list tr {
+  line-height: 1.8em;
+}
+
+.streamer-list tr.streamer-offline {
+  opacity: 0.38;
+}
+
+.streamer-list .col-platform {
+  padding-right: 8px;
+  width: 18px;
+  text-align: center;
+}
+
+.streamer-list .col-dot {
+  padding-right: 6px;
+  width: 10px;
+}
+
+.streamer-list .col-name {
+  padding-right: 14px;
+  min-width: 90px;
+}
+
+.streamer-list .col-game {
+  padding-right: 14px;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.streamer-list .col-viewers {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ── Live dot ────────────────────────────────────────────────────────────── */
+.live-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.live-dot.is-live {
+  background-color: #e53e3e;
+  box-shadow: 0 0 5px #e53e3e99;
+}
+
+.live-dot.is-offline {
+  background-color: #444;
+}
+
+/* ── Card View ───────────────────────────────────────────────────────────── */
+.streamer-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-width: 420px;
+}
+
+.streamer-card {
+  flex: 1 1 170px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  border-left: 3px solid #444;
+  padding: 8px 12px;
+  box-sizing: border-box;
+}
+
+.streamer-card.is-live.platform-twitch  { border-left-color: #9147ff; }
+.streamer-card.is-live.platform-youtube { border-left-color: #ff0000; }
+.streamer-card.is-live.platform-kick    { border-left-color: #53fc18; }
+
+.streamer-card.is-offline {
+  opacity: 0.38;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 5px;
+}
+
+.card-name {
+  flex: 1;
+}
+
+.live-badge {
+  font-size: 0.6em;
+  font-weight: bold;
+  letter-spacing: 0.06em;
+  background: #e53e3e;
+  color: #fff;
+  padding: 2px 5px;
+  border-radius: 3px;
+}
+
+.card-game {
+  margin-bottom: 3px;
+}
+
+.card-title {
+  color: #999;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+  margin-bottom: 4px;
+}
+
+.card-viewers,
+.card-offline {
+  color: #888;
+}
