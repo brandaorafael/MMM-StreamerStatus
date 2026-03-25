@@ -1,8 +1,28 @@
 {
   "name": "MMM-StreamerStatus",
-  "version": "1.0.0",
-  "description": "MagicMirror module to display live streamers from Twitch, Kick, and YouTube",
+  "version": "1.1.0",
+  "description": "MagicMirror² module to display live streamers from Twitch, Kick, and YouTube",
+  "main": "MMM-StreamerStatus.js",
   "license": "MIT",
+  "author": "Rafael Brandao",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/brandaorafael/MMM-StreamerStatus.git"
+  },
+  "bugs": {
+    "url": "https://github.com/brandaorafael/MMM-StreamerStatus/issues"
+  },
+  "homepage": "https://github.com/brandaorafael/MMM-StreamerStatus#readme",
+  "keywords": [
+    "magicmirror",
+    "magicmirror2",
+    "magicmirror-module",
+    "twitch",
+    "kick",
+    "youtube",
+    "streaming",
+    "live"
+  ],
   "engines": {
     "node": ">=18.0.0"
   }
