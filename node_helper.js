@@ -3,12 +3,22 @@
 const NodeHelper = require("node_helper");
 const Log = require("logger");
 
+const VALID_PLATFORMS = new Set(["twitch", "kick", "youtube"]);
+const KICK_BATCH_SIZE = 50;
+
 module.exports = NodeHelper.create({
   twitchToken: null,
   twitchTokenExpiry: 0,
 
   kickToken: null,
   kickTokenExpiry: 0,
+
+  // Credentials stored on first socket notification; never change at runtime
+  twitchClientId: "",
+  twitchClientSecret: "",
+  kickClientId: "",
+  kickClientSecret: "",
+  youtubeApiKey: "",
 
   start() {
     Log.log("[MMM-StreamerStatus] Node helper started");
@@ -23,26 +33,47 @@ module.exports = NodeHelper.create({
   },
 
   async checkStreamers(payload) {
-    const { streamers, checkYoutube, twitchClientId, twitchClientSecret, kickClientId, kickClientSecret, youtubeApiKey } = payload;
+    // Store credentials on first receipt (they don't change at runtime)
+    if (payload.twitchClientId)     this.twitchClientId     = payload.twitchClientId;
+    if (payload.twitchClientSecret) this.twitchClientSecret = payload.twitchClientSecret;
+    if (payload.kickClientId)       this.kickClientId       = payload.kickClientId;
+    if (payload.kickClientSecret)   this.kickClientSecret   = payload.kickClientSecret;
+    if (payload.youtubeApiKey)      this.youtubeApiKey      = payload.youtubeApiKey;
 
-    const twitchStreamers = streamers.filter((s) => s.platform === "twitch");
-    const kickStreamers = streamers.filter((s) => s.platform === "kick");
-    const youtubeStreamers = streamers.filter((s) => s.platform === "youtube");
+    const { streamers, checkYoutube } = payload;
+
+    // Validate each streamer entry before processing
+    const validStreamers = [];
+    for (const s of streamers) {
+      if (!VALID_PLATFORMS.has(s.platform)) {
+        Log.warn(`[MMM-StreamerStatus] Unknown platform "${s.platform}" for streamer "${s.name}" — skipping`);
+        continue;
+      }
+      if (s.platform === "youtube" && !s.channelId) {
+        Log.warn(`[MMM-StreamerStatus] YouTube streamer "${s.name}" is missing channelId — skipping`);
+        continue;
+      }
+      validStreamers.push(s);
+    }
+
+    const twitchStreamers  = validStreamers.filter((s) => s.platform === "twitch");
+    const kickStreamers    = validStreamers.filter((s) => s.platform === "kick");
+    const youtubeStreamers = validStreamers.filter((s) => s.platform === "youtube");
 
     const fetches = [
-      this.fetchTwitch(twitchStreamers, twitchClientId, twitchClientSecret),
-      this.fetchKick(kickStreamers, kickClientId, kickClientSecret),
+      this.fetchTwitch(twitchStreamers),
+      this.fetchKick(kickStreamers),
     ];
 
     if (checkYoutube) {
-      fetches.push(this.fetchYoutube(youtubeStreamers, youtubeApiKey));
+      fetches.push(this.fetchYoutube(youtubeStreamers));
     }
 
     const [twitchResult, kickResult, youtubeResult] = await Promise.allSettled(fetches);
 
     const data = [
       ...(twitchResult.status === "fulfilled" ? twitchResult.value : this.makeOffline(twitchStreamers, "twitch")),
-      ...(kickResult.status === "fulfilled" ? kickResult.value : this.makeOffline(kickStreamers, "kick")),
+      ...(kickResult.status === "fulfilled"   ? kickResult.value   : this.makeOffline(kickStreamers, "kick")),
     ];
 
     if (checkYoutube) {
@@ -58,43 +89,47 @@ module.exports = NodeHelper.create({
 
   // ── Twitch ────────────────────────────────────────────────────────────────
 
-  async getTwitchToken(clientId, clientSecret) {
+  async getTwitchToken() {
     if (this.twitchToken && Date.now() < this.twitchTokenExpiry) {
       return this.twitchToken;
     }
 
     const res = await fetch(
-      `https://id.twitch.tv/oauth2/token?client_id=${clientId}&client_secret=${clientSecret}&grant_type=client_credentials`,
+      `https://id.twitch.tv/oauth2/token?client_id=${this.twitchClientId}&client_secret=${this.twitchClientSecret}&grant_type=client_credentials`,
       { method: "POST" }
     );
 
+    if (res.status === 429) throw new Error("Twitch token request rate-limited (429)");
     if (!res.ok) throw new Error(`Twitch token request failed: ${res.status}`);
 
     const json = await res.json();
     this.twitchToken = json.access_token;
-    // Subtract 5 min buffer before expiry
     this.twitchTokenExpiry = Date.now() + (json.expires_in - 300) * 1000;
     return this.twitchToken;
   },
 
-  async fetchTwitch(streamers, clientId, clientSecret) {
+  async fetchTwitch(streamers) {
     if (!streamers.length) return [];
 
-    if (!clientId || !clientSecret) {
+    if (!this.twitchClientId || !this.twitchClientSecret) {
       Log.warn("[MMM-StreamerStatus] Twitch credentials not set — skipping Twitch");
       return this.makeOffline(streamers, "twitch");
     }
 
-    const token = await this.getTwitchToken(clientId, clientSecret);
+    const token = await this.getTwitchToken();
     const query = streamers.map((s) => `user_login=${encodeURIComponent(s.name)}`).join("&");
 
     const res = await fetch(`https://api.twitch.tv/helix/streams?${query}`, {
       headers: {
-        "Client-ID": clientId,
+        "Client-ID": this.twitchClientId,
         Authorization: `Bearer ${token}`,
       },
     });
 
+    if (res.status === 429) {
+      Log.warn("[MMM-StreamerStatus] Twitch rate limit hit (429) — skipping this cycle");
+      return this.makeOffline(streamers, "twitch");
+    }
     if (!res.ok) throw new Error(`Twitch streams request failed: ${res.status}`);
 
     const { data: liveStreams } = await res.json();
@@ -124,7 +159,7 @@ module.exports = NodeHelper.create({
 
   // ── Kick ──────────────────────────────────────────────────────────────────
 
-  async getKickToken(clientId, clientSecret) {
+  async getKickToken() {
     if (this.kickToken && Date.now() < this.kickTokenExpiry) {
       return this.kickToken;
     }
@@ -134,11 +169,12 @@ module.exports = NodeHelper.create({
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         grant_type: "client_credentials",
-        client_id: clientId,
-        client_secret: clientSecret,
+        client_id: this.kickClientId,
+        client_secret: this.kickClientSecret,
       }),
     });
 
+    if (res.status === 429) throw new Error("Kick token request rate-limited (429)");
     if (!res.ok) throw new Error(`Kick token request failed: ${res.status}`);
 
     const json = await res.json();
@@ -147,25 +183,35 @@ module.exports = NodeHelper.create({
     return this.kickToken;
   },
 
-  async fetchKick(streamers, clientId, clientSecret) {
+  async fetchKick(streamers) {
     if (!streamers.length) return [];
 
-    if (!clientId || !clientSecret) {
+    if (!this.kickClientId || !this.kickClientSecret) {
       Log.warn("[MMM-StreamerStatus] Kick credentials not set — skipping Kick");
       return this.makeOffline(streamers, "kick");
     }
 
-    const token = await this.getKickToken(clientId, clientSecret);
+    const token = await this.getKickToken();
+    const channels = [];
 
-    // Batch all slugs in a single request (API supports up to 50)
-    const query = streamers.map((s) => `slug=${encodeURIComponent(s.name)}`).join("&");
-    const res = await fetch(`https://api.kick.com/public/v1/channels?${query}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    // Kick API supports up to 50 slugs per request
+    for (let i = 0; i < streamers.length; i += KICK_BATCH_SIZE) {
+      const batch = streamers.slice(i, i + KICK_BATCH_SIZE);
+      const query = batch.map((s) => `slug=${encodeURIComponent(s.name)}`).join("&");
 
-    if (!res.ok) throw new Error(`Kick channels request failed: ${res.status}`);
+      const res = await fetch(`https://api.kick.com/public/v1/channels?${query}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-    const { data: channels } = await res.json();
+      if (res.status === 429) {
+        Log.warn("[MMM-StreamerStatus] Kick rate limit hit (429) — skipping this batch");
+        continue;
+      }
+      if (!res.ok) throw new Error(`Kick channels request failed: ${res.status}`);
+
+      const { data } = await res.json();
+      channels.push(...data);
+    }
 
     const channelMap = {};
     for (const ch of channels) {
@@ -194,15 +240,15 @@ module.exports = NodeHelper.create({
 
   // ── YouTube ───────────────────────────────────────────────────────────────
 
-  async fetchYoutube(streamers, apiKey) {
+  async fetchYoutube(streamers) {
     if (!streamers.length) return [];
 
-    if (!apiKey) {
+    if (!this.youtubeApiKey) {
       Log.warn("[MMM-StreamerStatus] YouTube API key not set — skipping YouTube");
       return this.makeOffline(streamers, "youtube");
     }
 
-    const results = await Promise.allSettled(streamers.map((s) => this.fetchYoutubeChannel(s, apiKey)));
+    const results = await Promise.allSettled(streamers.map((s) => this.fetchYoutubeChannel(s)));
 
     return results.map((result, i) => {
       if (result.status === "fulfilled") return result.value;
@@ -211,12 +257,13 @@ module.exports = NodeHelper.create({
     });
   },
 
-  async fetchYoutubeChannel(streamer, apiKey) {
+  async fetchYoutubeChannel(streamer) {
     // Search for active live stream on channel (costs 100 quota units)
     const searchRes = await fetch(
-      `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${streamer.channelId}&eventType=live&type=video&key=${apiKey}`
+      `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${streamer.channelId}&eventType=live&type=video&key=${this.youtubeApiKey}`
     );
 
+    if (searchRes.status === 429) throw new Error("YouTube quota exhausted (429) — increase youtubeUpdateInterval");
     if (!searchRes.ok) throw new Error(`YouTube search failed: ${searchRes.status}`);
 
     const searchData = await searchRes.json();
@@ -232,7 +279,7 @@ module.exports = NodeHelper.create({
 
     // Fetch concurrent viewer count (costs 1 quota unit)
     const videoRes = await fetch(
-      `https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${videoId}&key=${apiKey}`
+      `https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${videoId}&key=${this.youtubeApiKey}`
     );
     const videoData = await videoRes.json();
     const viewers = parseInt(videoData.items?.[0]?.liveStreamingDetails?.concurrentViewers ?? "0", 10) || null;
