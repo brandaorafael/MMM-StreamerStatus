@@ -4,6 +4,20 @@ A [MagicMirror²](https://github.com/MichMich/MagicMirror) module that shows whi
 
 Displays streamer name, platform, current game/category, and live viewer count. Supports two display styles: a compact list or a card grid.
 
+<!-- Add screenshots of list and card views here -->
+
+---
+
+## What Credentials Do I Need?
+
+| Platform | Required config fields | Where to get them |
+|---|---|---|
+| Twitch | `twitchClientId` + `twitchClientSecret` | [dev.twitch.tv/console](https://dev.twitch.tv/console) |
+| Kick | `kickClientId` + `kickClientSecret` | [dev.kick.com](https://dev.kick.com) |
+| YouTube | `youtubeApiKey` + `channelId` per streamer | [console.cloud.google.com](https://console.cloud.google.com) |
+
+Only configure the platforms you actually use. Missing credentials cause that platform to be skipped gracefully — no errors.
+
 ---
 
 ## Dependencies
@@ -164,6 +178,31 @@ Navigate to the module folder and pull the latest changes:
 cd ~/MagicMirror/modules/MMM-StreamerStatus
 git pull
 ```
+
+---
+
+## Troubleshooting
+
+**Module shows "Loading..." indefinitely**
+- Check the MagicMirror log (`~/MagicMirror/magicmirror.log`) for `[MMM-StreamerStatus]` error lines.
+- Verify your credentials are correct in `config.js`. Both Client ID and Client Secret are required for Twitch and Kick.
+
+**A streamer shows as offline but is clearly live**
+- For **Kick**: make sure the `name` field matches the channel's exact slug (lowercase, no spaces).
+- For **Twitch**: confirm the login name matches what's shown in the Twitch URL.
+- For **YouTube**: the module only detects streams started after the last poll. Wait one `youtubeUpdateInterval` cycle (default 15 min).
+
+**YouTube shows offline even though the channel is live**
+- Verify `channelId` starts with `UC` and matches the channel's About page.
+- Check your quota in [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → YouTube Data API v3 → Quotas. Each check uses ~101 units; free tier is 10,000/day.
+- Increase `youtubeUpdateInterval` to reduce quota consumption.
+
+**Rate limit errors (429) appear in the log**
+- Increase `updateInterval`. The default 2 minutes is already conservative for most use cases.
+
+**Module crashes or disappears from the mirror**
+- Confirm Node.js version is 18 or higher: `node --version`.
+- Check for syntax errors in `config.js` by running `node -c config/config.js` from the MagicMirror root.
 
 ---
 
