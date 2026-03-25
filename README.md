@@ -4,7 +4,7 @@ A [MagicMirror²](https://github.com/MichMich/MagicMirror) module that shows whi
 
 Displays streamer name, platform, current game/category, and live viewer count. Supports two display styles: a compact list or a card grid.
 
-<!-- Add screenshots of list and card views here -->
+![MMM-StreamerStatus preview](screenshots/preview.png)
 
 ---
 
